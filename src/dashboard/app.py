@@ -1,16 +1,23 @@
 import streamlit as st
 import pandas as pd
+import boto3
+from io import StringIO
 
-st.title("My Investment Dashboard")
+BUCKET_NAME = "investment-dashboard-data-shimizu"
+FILE_KEY = "crypto/crypto_price.csv"
 
-df = pd.read_csv("../data/crypto_price.csv", header=None)
+s3 = boto3.client('s3')
 
-df.columns = ["timestamp","btc","eth"]
+def load_data_from_s3():
+    obj = s3.get_object(Bucket=BUCKET_NAME, Key=FILE_KEY)
+    data = obj['Body'].read().decode('utf-8')
+    return data
 
-btc_latest = df["btc"].iloc[-1]
-eth_latest = df["eth"].iloc[-1]
+st.title("Crypto Dashboard")
 
-st.metric("BTC Price", btc_latest)
-st.metric("ETH Price", eth_latest)
+csv_data = load_data_from_s3()
 
-st.line_chart(df[["btc","eth"]])
+df = pd.read_csv(StringIO(csv_data), header=None)
+df.columns = ["timestamp", "BTC", "ETH"]
+
+st.line_chart(df[["BTC", "ETH"]])
