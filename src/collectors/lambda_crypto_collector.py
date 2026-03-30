@@ -5,8 +5,9 @@ import boto3
 
 s3 = boto3.client('s3')
 
-BUCKET_NAME = "あなたのバケット名"
-FILE_KEY = "crypto/crypto_price.csv"
+BUCKET_NAME = "investment-dashboard-data-shimizu"
+# 削除してOK（使わなくなる）
+# FILE_KEY = "crypto/crypto_price.csv"
 
 def lambda_handler(event, context):
 
@@ -15,26 +16,34 @@ def lambda_handler(event, context):
     with urllib.request.urlopen(url) as response:
         data = json.loads(response.read().decode())
 
-    btc_price = data["bitcoin"]["usd"]
-    eth_price = data["ethereum"]["usd"]
+    # ▼ ① symbolごとにまとめる（超重要）
+    price_dict = {
+        "BTC": data["bitcoin"]["usd"],
+        "ETH": data["ethereum"]["usd"]
+    }
 
     now = datetime.datetime.now()
 
-    row = f"{now},{btc_price},{eth_price}\n"
+    # ▼ ② ループで処理
+    for symbol, price in price_dict.items():
 
-    try:
-        obj = s3.get_object(Bucket=BUCKET_NAME, Key=FILE_KEY)
-        existing_data = obj['Body'].read().decode('utf-8')
-    except:
-        existing_data = ""
+        row = f"{now},{price}\n"
 
-    new_data = existing_data + row
+        key = f"{symbol}/data.csv"
 
-    s3.put_object(
-        Bucket=BUCKET_NAME,
-        Key=FILE_KEY,
-        Body=new_data
-    )
+        try:
+            obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+            existing_data = obj['Body'].read().decode('utf-8')
+        except:
+            existing_data = ""
+
+        new_data = existing_data + row
+
+        s3.put_object(
+            Bucket=BUCKET_NAME,
+            Key=key,
+            Body=new_data
+        )
 
     return {
         'statusCode': 200,
