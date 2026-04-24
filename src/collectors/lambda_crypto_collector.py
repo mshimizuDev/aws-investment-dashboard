@@ -6,29 +6,39 @@ import boto3
 s3 = boto3.client('s3')
 
 BUCKET_NAME = "investment-dashboard-data-shimizu"
-# 削除してOK（使わなくなる）
-# FILE_KEY = "crypto/crypto_price.csv"
 
 def lambda_handler(event, context):
 
-    url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
+    # ▼ Crypto（BTC / ETH）
+    crypto_url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
 
-    with urllib.request.urlopen(url) as response:
-        data = json.loads(response.read().decode())
+    with urllib.request.urlopen(crypto_url) as response:
+        crypto_data = json.loads(response.read().decode())
 
-    # ▼ ① symbolごとにまとめる（超重要）
+    btc_price = crypto_data["bitcoin"]["usd"]
+    eth_price = crypto_data["ethereum"]["usd"]
+
+    # ▼ USDJPY（為替）
+    fx_url = "https://api.exchangerate-api.com/v4/latest/USD"
+
+    with urllib.request.urlopen(fx_url) as response:
+        fx_data = json.loads(response.read().decode())
+
+    usd_jpy = fx_data["rates"]["JPY"]
+
+    # ▼ まとめる（ここが重要）
     price_dict = {
-        "BTC": data["bitcoin"]["usd"],
-        "ETH": data["ethereum"]["usd"]
+        "BTC": btc_price,
+        "ETH": eth_price,
+        "USDJPY": usd_jpy
     }
 
     now = datetime.datetime.now()
 
-    # ▼ ② ループで処理
+    # ▼ ループでS3保存
     for symbol, price in price_dict.items():
 
         row = f"{now},{price}\n"
-
         key = f"{symbol}/data.csv"
 
         try:
