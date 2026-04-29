@@ -7,29 +7,69 @@ BUCKET_NAME = "investment-dashboard-data-shimizu"
 
 s3 = boto3.client('s3')
 
-def load_data_from_s3(symbol):
+# ▼ S3からデータ取得
+def load_data(symbol):
     key = f"{symbol}/data.csv"
-    obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
-    data = obj['Body'].read().decode('utf-8')
-    return data
+    try:
+        obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        data = obj['Body'].read().decode('utf-8')
+        df = pd.read_csv(StringIO(data), header=None)
+        df.columns = ["timestamp", "price"]
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        return df
+    except:
+        return None
 
-# ▼ UI
-st.title("Investment Dashboard")
 
-symbol = st.selectbox(
-    "Select Asset",
-    ["BTC", "ETH", "USDJPY"]
-)
+# ▼ UIタイトル
+st.title("📊 Investment Dashboard")
 
-# ▼ データ取得
-csv_data = load_data_from_s3(symbol)
+# ▼ 表示したい資産
+assets = ["BTC", "ETH", "USDJPY", "SP500", "GOLD"]
 
-# ▼ DataFrame化
-df = pd.read_csv(StringIO(csv_data), header=None)
-df.columns = ["timestamp", "price"]
+data_dict = {}
 
-# ▼ timestamp整形（重要）
-df["timestamp"] = pd.to_datetime(df["timestamp"])
+# ▼ データ読み込み
+for asset in assets:
+    df = load_data(asset)
+    if df is not None:
+        data_dict[asset] = df
 
-# ▼ グラフ
-st.line_chart(df.set_index("timestamp")["price"])
+# -------------------------
+# KPI表示（現在価格）
+# -------------------------
+st.subheader("📌 Current Prices")
+
+cols = st.columns(len(data_dict))
+
+for i, (asset, df) in enumerate(data_dict.items()):
+    latest_price = df["price"].iloc[-1]
+    cols[i].metric(asset, f"{latest_price:.2f}")
+
+# -------------------------
+# グラフ表示（上段）
+# -------------------------
+st.subheader("📈 Market Charts")
+
+top_assets = ["BTC", "ETH", "USDJPY"]
+cols = st.columns(3)
+
+for i, asset in enumerate(top_assets):
+    if asset in data_dict:
+        df = data_dict[asset]
+        with cols[i]:
+            st.write(asset)
+            st.line_chart(df.set_index("timestamp")["price"])
+
+# -------------------------
+# グラフ表示（下段）
+# -------------------------
+bottom_assets = ["SP500", "GOLD"]
+cols = st.columns(2)
+
+for i, asset in enumerate(bottom_assets):
+    if asset in data_dict:
+        df = data_dict[asset]
+        with cols[i]:
+            st.write(asset)
+            st.line_chart(df.set_index("timestamp")["price"])
